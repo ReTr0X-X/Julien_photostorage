@@ -71,6 +71,7 @@ export async function initDB() {
       name VARCHAR(150) DEFAULT NULL,
       email VARCHAR(255) DEFAULT NULL,
       avatar_path VARCHAR(255) DEFAULT NULL,
+      role VARCHAR(20) DEFAULT 'user',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB;
   `);
@@ -87,6 +88,10 @@ export async function initDB() {
   try {
     await dbPool.query('ALTER TABLE users ADD COLUMN avatar_path VARCHAR(255) DEFAULT NULL AFTER email;');
     console.log('[DB] Migration: Added avatar_path column to users.');
+  } catch (err) {}
+  try {
+    await dbPool.query('ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT "user" AFTER avatar_path;');
+    console.log('[DB] Migration: Added role column to users.');
   } catch (err) {}
 
   // 2. Car Photos Table (Unified table for timeline & description vault)
@@ -175,22 +180,25 @@ export async function initDB() {
   `);
 
   // 3. Seed Default Users if missing
-  const [officerUsers] = await dbPool.query('SELECT * FROM users WHERE username = ?', ['officer']);
+  const [officerUsers] = await dbPool.query('SELECT * FROM users WHERE id = 1');
   if (officerUsers.length === 0) {
     const defaultUser = 'officer';
     const defaultPass = 'evidence2026';
     const hash = hashPassword(defaultPass);
-    await dbPool.query('INSERT INTO users (username, password_hash) VALUES (?, ?)', [defaultUser, hash]);
+    await dbPool.query('INSERT INTO users (id, username, password_hash, role) VALUES (1, ?, ?, "user")', [defaultUser, hash]);
     console.log(`[DB] Seeded default user: "${defaultUser}"`);
   }
 
-  const [devUsers] = await dbPool.query('SELECT * FROM users WHERE username = ?', ['dev']);
+  const [devUsers] = await dbPool.query('SELECT * FROM users WHERE id = 2 OR role = "admin"');
   if (devUsers.length === 0) {
     const devUser = 'dev';
     const devPass = 'devpass2026';
     const hash = hashPassword(devPass);
-    await dbPool.query('INSERT INTO users (username, password_hash) VALUES (?, ?)', [devUser, hash]);
+    await dbPool.query('INSERT INTO users (id, username, password_hash, role) VALUES (2, ?, ?, "admin")', [devUser, hash]);
     console.log(`[DB] Seeded dev user: "${devUser}"`);
+  } else {
+    // Ensure the admin role is set for the administrator (which has ID 2 or is marked as admin)
+    await dbPool.query('UPDATE users SET role = "admin" WHERE id = ?', [devUsers[0].id]);
   }
 
   // 4. Clean up any pre-existing legacy mock photos
@@ -210,3 +218,14 @@ export async function query(sql, params) {
   const [results] = await dbPool.query(sql, params);
   return results;
 }
+
+export async function isAdmin(username) {
+  try {
+    const results = await query('SELECT role FROM users WHERE username = ?', [username]);
+    return results && results.length > 0 && results[0].role === 'admin';
+  } catch (err) {
+    console.error('[DB] Error checking isAdmin:', err);
+    return false;
+  }
+}
+

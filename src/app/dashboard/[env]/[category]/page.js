@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import crypto from 'crypto';
 import DashboardClient from './DashboardClient';
+import { isAdmin } from '@/lib/db';
 
 export default async function DashboardPage({ params }) {
   const { env, category } = await params;
@@ -30,5 +31,7 @@ export default async function DashboardPage({ params }) {
     redirect('/login');
   }
 
-  return <DashboardClient env={env} category={category} operatorName={operatorName} />;
+  const userIsAdmin = await isAdmin(operatorName);
+
+  return <DashboardClient env={env} category={category} operatorName={operatorName} isAdmin={userIsAdmin} />;
 }

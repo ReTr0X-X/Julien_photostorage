@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query, initDB } from '@/lib/db';
+import { query, initDB, isAdmin } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 
 export async function POST(request) {
@@ -20,7 +20,7 @@ export async function POST(request) {
     if (action === 'revoke') {
       await query('UPDATE share_tokens SET revoked = 1 WHERE id = ?', [id]);
     } else if (action === 'extend') {
-      if (user.username !== 'dev') {
+      if (!(await isAdmin(user.username))) {
         return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 403 });
       }
       const expiresAt = new Date();

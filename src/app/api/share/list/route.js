@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query, initDB } from '@/lib/db';
+import { query, initDB, isAdmin } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 
 export async function GET(request) {
@@ -18,7 +18,7 @@ export async function GET(request) {
     `;
     const params = [];
 
-    if (user.username !== 'dev') {
+    if (!(await isAdmin(user.username))) {
       sql += ` WHERE st.revoked = 0 AND st.expires_at > CURRENT_TIMESTAMP()`;
     }
 

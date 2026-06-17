@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { query, initDB, hashPassword } from '@/lib/db';
+import { query, initDB, hashPassword, isAdmin } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import fs from 'fs/promises';
 import path from 'path';
-
-function isAdmin(username) {
-  return username === 'dev';
-}
 
 export async function GET(request) {
   try {
@@ -17,7 +13,7 @@ export async function GET(request) {
 
     await initDB();
 
-    if (isAdmin(user.username)) {
+    if (await isAdmin(user.username)) {
       const users = await query('SELECT id, username, name, email, avatar_path, created_at FROM users ORDER BY username ASC');
       return NextResponse.json({ users });
     } else {
@@ -37,7 +33,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 401 });
     }
 
-    if (!isAdmin(user.username)) {
+    if (!(await isAdmin(user.username))) {
       return NextResponse.json({ error: 'Geen toegang' }, { status: 403 });
     }
 
@@ -169,12 +165,8 @@ export async function PUT(request) {
       if (name !== undefined) {
         const cleanName = name ? name.trim() : '';
         if (cleanName) {
-          if (targetUsername !== 'dev') {
-            await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
-            updatedUsername = cleanName;
-          } else {
-            await query('UPDATE users SET name = ? WHERE id = ?', [cleanName, targetId]);
-          }
+          await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
+          updatedUsername = cleanName;
         } else {
           await query('UPDATE users SET name = ? WHERE id = ?', [null, targetId]);
         }
@@ -207,7 +199,7 @@ export async function PUT(request) {
     }
 
     // Case 2: Admin reset/override
-    if (!isAdmin(user.username)) {
+    if (!(await isAdmin(user.username))) {
       return NextResponse.json({ error: 'Geen toegang' }, { status: 403 });
     }
 
@@ -218,11 +210,7 @@ export async function PUT(request) {
     if (name !== undefined) {
       const cleanName = name ? name.trim() : '';
       if (cleanName) {
-        if (targetUsername !== 'dev') {
-          await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
-        } else {
-          await query('UPDATE users SET name = ? WHERE id = ?', [cleanName, targetId]);
-        }
+        await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
       } else {
         await query('UPDATE users SET name = ? WHERE id = ?', [null, targetId]);
       }
@@ -251,7 +239,7 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 401 });
     }
 
-    if (!isAdmin(user.username)) {
+    if (!(await isAdmin(user.username))) {
       return NextResponse.json({ error: 'Geen toegang' }, { status: 403 });
     }
 
@@ -264,21 +252,22 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Gebruiker-ID is verplicht' }, { status: 400 });
     }
 
-    const targetUsers = await query('SELECT username FROM users WHERE id = ?', [id]);
+    const targetUsers = await query('SELECT username, role FROM users WHERE id = ?', [id]);
     if (!targetUsers || targetUsers.length === 0) {
       return NextResponse.json({ error: 'Gebruiker niet gevonden' }, { status: 404 });
     }
 
     const targetUsername = targetUsers[0].username;
+    const targetRole = targetUsers[0].role;
 
     // Prevent deleting oneself
     if (targetUsername === user.username) {
       return NextResponse.json({ error: 'Je kunt je eigen account niet verwijderen' }, { status: 400 });
     }
 
-    // Prevent deleting the main admin 'dev'
-    if (targetUsername === 'dev') {
-      return NextResponse.json({ error: 'Kan de administrator dev niet verwijderen' }, { status: 400 });
+    // Prevent deleting admin role users
+    if (targetRole === 'admin') {
+      return NextResponse.json({ error: 'Kan de administrator niet verwijderen' }, { status: 400 });
     }
 
     await query('DELETE FROM users WHERE id = ?', [id]);

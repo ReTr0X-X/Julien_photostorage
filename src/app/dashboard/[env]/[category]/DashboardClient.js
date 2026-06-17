@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function DashboardClient({ env, category, operatorName }) {
+export default function DashboardClient({ env, category, operatorName, isAdmin }) {
   const router = useRouter();
 
   // Core Data State
@@ -398,7 +398,7 @@ export default function DashboardClient({ env, category, operatorName }) {
         expires_at: data.expires_at
       });
       await fetchActiveShareToken(photoId);
-      if (operatorName === 'dev') {
+      if (isAdmin) {
         fetchShareTokens();
       }
     } catch (err) {
@@ -423,7 +423,7 @@ export default function DashboardClient({ env, category, operatorName }) {
       }
       setActiveToken(null);
       setShareLink('');
-      if (operatorName === 'dev') {
+      if (isAdmin) {
         fetchShareTokens();
       }
     } catch (err) {
@@ -1557,7 +1557,7 @@ export default function DashboardClient({ env, category, operatorName }) {
             >
               📤 Uploaden
             </button>
-            {operatorName === 'dev' && (
+            {isAdmin && (
               <button 
                 className="header-icon-btn settings-gear-btn" 
                 onClick={() => {
@@ -2228,7 +2228,7 @@ export default function DashboardClient({ env, category, operatorName }) {
       )}
 
       {/* 5. DEV SETTINGS & UNRAID API CONTROLS MODAL */}
-      {showSettingsModal && operatorName === 'dev' && (
+      {showSettingsModal && isAdmin && (
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
           <div className="modal-content glass" style={{ maxWidth: '800px', width: '95%' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -2915,7 +2915,7 @@ export default function DashboardClient({ env, category, operatorName }) {
                 >
                   🔑 Wachtwoord
                 </button>
-                {operatorName === 'dev' && (
+                {isAdmin && (
                   <button
                     type="button"
                     onClick={() => {
@@ -3086,7 +3086,7 @@ export default function DashboardClient({ env, category, operatorName }) {
                   {userSuccess && <div className="banner" style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', color: '#a7f3d0', padding: '0.75rem', borderRadius: '8px', textAlign: 'center', marginBottom: '1.25rem' }}>✔️ {userSuccess}</div>}
 
                   {/* Create User Section */}
-                  {operatorName === 'dev' && (
+                  {isAdmin && (
                     <div className="glass" style={{ padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(255, 255, 255, 0.01)' }}>
                       <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', color: 'white' }}>➕ Nieuwe Gebruiker Aanmaken</h3>
                       <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -3131,7 +3131,7 @@ export default function DashboardClient({ env, category, operatorName }) {
 
                   {/* Reset password overlay or inline section */}
                   {/* Admin Edit User Panel */}
-                  {editUserId && operatorName === 'dev' && (
+                  {editUserId && isAdmin && (
                     <div className="glass" style={{ padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--accent-blue)', background: 'rgba(37, 99, 235, 0.03)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         👤 Gebruikersgegevens Bewerken: {editUserUsername}
@@ -3233,7 +3233,7 @@ export default function DashboardClient({ env, category, operatorName }) {
                   {/* Users List */}
                   <div>
                     <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', color: 'white' }}>
-                      {operatorName === 'dev' ? '👥 Bestaande Gebruikers' : '👤 Mijn Accountgegevens'}
+                      {isAdmin ? '👥 Bestaande Gebruikers' : '👤 Mijn Accountgegevens'}
                     </h3>
                     {loadingUsers ? (
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem' }}>Gebruikers laden...</div>
@@ -3263,7 +3263,7 @@ export default function DashboardClient({ env, category, operatorName }) {
                                   </td>
                                   <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{createdDate}</td>
                                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                                    {operatorName === 'dev' && (
+                                    {isAdmin && (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -3291,7 +3291,7 @@ export default function DashboardClient({ env, category, operatorName }) {
                                         ✏️ Bewerk
                                       </button>
                                     )}
-                                    {(!isSelf || (operatorName !== 'dev' && isSelf)) && (
+                                    {(!isSelf || (!isAdmin && isSelf)) && (
                                       <button
                                         type="button"
                                         onClick={() => handleDeleteUser(usr.id, usr.username)}
