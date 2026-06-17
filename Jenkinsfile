@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
+
     environment {
         APP_PORT = '8899'
     }
@@ -47,8 +51,12 @@ pipeline {
                 sh 'docker ps'
                 // Wait for Node server initialization
                 sleep time: 10, unit: 'SECONDS'
-                // Perform quick health check curl
-                sh "curl -I http://localhost:${APP_PORT}/login"
+                // Get the container IP and perform quick health check curl
+                sh '''
+                    CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ems_vault_web)
+                    echo "Checking health for ems_vault_web container at IP: ${CONTAINER_IP}"
+                    curl -I http://${CONTAINER_IP}:3000/login
+                '''
             }
         }
     }
@@ -61,7 +69,7 @@ pipeline {
             echo "Pipeline complete! EMS Vault is online at http://localhost:${APP_PORT}"
         }
         failure {
-            echo "Deployment failed! Inspect logs by running 'docker compose logs' inside workspace."
+            echo "Deployment failed! Inspect logs by running 'docker logs ems_vault_web' inside workspace."
         }
     }
 }
