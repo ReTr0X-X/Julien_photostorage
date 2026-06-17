@@ -1,0 +1,22 @@
+services:
+  web:
+    build: .
+    container_name: ems_vault_web
+    restart: always
+    ports:
+      - "8899:3000"
+    environment:
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      DB_NAME: ${DB_NAME:-ems_vault}
+      ADMIN_USER: ${ADMIN_USER:-officer}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-evidence2026}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - upload_data:/app/public/uploads
+
+volumes:
+  upload_data:
