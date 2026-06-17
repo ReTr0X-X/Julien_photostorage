@@ -2915,27 +2915,29 @@ export default function DashboardClient({ env, category, operatorName }) {
                 >
                   🔑 Wachtwoord
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccountTab('users');
-                    fetchUsers();
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '0.5rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: accountTab === 'users' ? 'var(--accent-blue)' : 'transparent',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontWeight: '500',
-                    fontSize: '0.85rem',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {operatorName === 'dev' ? '👥 Gebruikersbeheer' : '👤 Mijn Account'}
-                </button>
+                {operatorName === 'dev' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountTab('users');
+                      fetchUsers();
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: accountTab === 'users' ? 'var(--accent-blue)' : 'transparent',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      fontSize: '0.85rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    👥 Gebruikersbeheer
+                  </button>
+                )}
               </div>
             </div>
 

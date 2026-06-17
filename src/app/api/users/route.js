@@ -169,8 +169,12 @@ export async function PUT(request) {
       if (name !== undefined) {
         const cleanName = name ? name.trim() : '';
         if (cleanName) {
-          await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
-          updatedUsername = cleanName;
+          if (targetUsername !== 'dev') {
+            await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
+            updatedUsername = cleanName;
+          } else {
+            await query('UPDATE users SET name = ? WHERE id = ?', [cleanName, targetId]);
+          }
         } else {
           await query('UPDATE users SET name = ? WHERE id = ?', [null, targetId]);
         }
@@ -214,7 +218,11 @@ export async function PUT(request) {
     if (name !== undefined) {
       const cleanName = name ? name.trim() : '';
       if (cleanName) {
-        await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
+        if (targetUsername !== 'dev') {
+          await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
+        } else {
+          await query('UPDATE users SET name = ? WHERE id = ?', [cleanName, targetId]);
+        }
       } else {
         await query('UPDATE users SET name = ? WHERE id = ?', [null, targetId]);
       }
