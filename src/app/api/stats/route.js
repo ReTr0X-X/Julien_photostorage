@@ -100,10 +100,9 @@ export async function GET(request) {
             try {
               data = await response.json();
             } catch (jsonErr) {
-              return NextResponse.json(
-                { error: `Ongeldige JSON-respons van custom API: ${jsonErr.message}` },
-                { status: 502 }
-              );
+              return NextResponse.json({
+                error: `Ongeldige JSON-respons van custom API: ${jsonErr.message}`
+              });
             }
             if (data && (data.storage || data.cpu !== undefined || data.ram !== undefined)) {
               return NextResponse.json({
@@ -112,22 +111,19 @@ export async function GET(request) {
                 ram: data.ram !== undefined ? data.ram : usedMemPercent
               });
             } else {
-              return NextResponse.json(
-                { error: 'Custom API-respons mist vereiste velden (storage, cpu, ram)' },
-                { status: 502 }
-              );
+              return NextResponse.json({
+                error: 'Custom API-respons mist vereiste velden (storage, cpu, ram)'
+              });
             }
           } else {
-            return NextResponse.json(
-              { error: `Custom API-endpoint retourneerde status ${response.status}` },
-              { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
-            );
+            return NextResponse.json({
+              error: `Custom API-endpoint retourneerde status ${response.status}`
+            });
           }
         } catch (err) {
-          return NextResponse.json(
-            { error: `Verbinding met custom API mislukt: ${err.message}` },
-            { status: 504 }
-          );
+          return NextResponse.json({
+            error: `Verbinding met custom API mislukt: ${err.message}`
+          });
         }
       }
 

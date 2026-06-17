@@ -352,14 +352,23 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
       params.append('mock', 'false');
 
       const res = await fetch(`/api/stats?${params.toString()}`);
-      const data = await res.json();
-      if (res.ok) {
+      
+      let data = null;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Niet-JSON respons ontvangen van server (Status ${res.status}): ${text.substring(0, 100)}`);
+      }
+
+      if (res.ok && !data.error) {
         setTestingConnection(false);
         addLog(`[OK] Response 200 from host. Unraid daemon responsive.`);
         addLog(`[INFO] Array disks reported operational. Used: ${data.storage?.used} TB / Total: ${data.storage?.total} TB`);
       } else {
         setTestingConnection(false);
-        addLog(`[ERROR] Connection failed: ${data.error || 'Unknown error'}`);
+        addLog(`[ERROR] Connection failed: ${data?.error || 'Unknown error'}`);
       }
     } catch (err) {
       setTestingConnection(false);
