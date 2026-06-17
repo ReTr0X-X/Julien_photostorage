@@ -163,9 +163,17 @@ export async function PUT(request) {
         await query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, targetId]);
       }
 
+      let updatedUsername = targetUsername;
+
       // Update name & email & avatar
       if (name !== undefined) {
-        await query('UPDATE users SET name = ? WHERE id = ?', [name ? name.trim() : null, targetId]);
+        const cleanName = name ? name.trim() : '';
+        if (cleanName) {
+          await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
+          updatedUsername = cleanName;
+        } else {
+          await query('UPDATE users SET name = ? WHERE id = ?', [null, targetId]);
+        }
       }
       if (email !== undefined) {
         await query('UPDATE users SET email = ? WHERE id = ?', [email ? email.trim() : null, targetId]);
@@ -174,7 +182,24 @@ export async function PUT(request) {
         await query('UPDATE users SET avatar_path = ? WHERE id = ?', [avatarPath, targetId]);
       }
 
-      return NextResponse.json({ success: true, avatar_path: avatarPath });
+      const response = NextResponse.json({ success: true, avatar_path: avatarPath, username: updatedUsername });
+
+      if (updatedUsername !== targetUsername) {
+        // Generate new session token for the new username
+        const crypto = require('crypto');
+        const hmac = crypto.createHmac('sha256', 'ems_vault_jwt_secret_2026').update(updatedUsername).digest('hex');
+        const token = `${updatedUsername}:${hmac}`;
+        
+        response.cookies.set('ems_vault_token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 60 * 60 * 24, // 1 day
+          path: '/',
+          sameSite: 'lax'
+        });
+      }
+
+      return response;
     }
 
     // Case 2: Admin reset/override
@@ -187,7 +212,12 @@ export async function PUT(request) {
       await query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, targetId]);
     }
     if (name !== undefined) {
-      await query('UPDATE users SET name = ? WHERE id = ?', [name ? name.trim() : null, targetId]);
+      const cleanName = name ? name.trim() : '';
+      if (cleanName) {
+        await query('UPDATE users SET name = ?, username = ? WHERE id = ?', [cleanName, cleanName, targetId]);
+      } else {
+        await query('UPDATE users SET name = ? WHERE id = ?', [null, targetId]);
+      }
     }
     if (email !== undefined) {
       await query('UPDATE users SET email = ? WHERE id = ?', [email ? email.trim() : null, targetId]);
@@ -199,6 +229,9 @@ export async function PUT(request) {
     return NextResponse.json({ success: true, avatar_path: avatarPath });
   } catch (err) {
     console.error('Update user profile API error:', err);
+    if (err.code === 'ER_DUP_ENTRY' || err.message.includes('Duplicate entry')) {
+      return NextResponse.json({ error: 'Gebruikersnaam bestaat al' }, { status: 400 });
+    }
     return NextResponse.json({ error: 'Interne serverfout' }, { status: 500 });
   }
 }

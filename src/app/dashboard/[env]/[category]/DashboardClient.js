@@ -825,7 +825,13 @@ export default function DashboardClient({ env, category, operatorName }) {
           setAvatarFile(null);
           setAvatarPreview('');
         }
-        fetchUsers();
+        if (data.username && data.username !== operatorName) {
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          fetchUsers();
+        }
       } else {
         setProfileError(data.error || 'Kon profiel niet bijwerken.');
       }
