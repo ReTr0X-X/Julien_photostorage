@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import os from 'os';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { verifyAuth } from '@/lib/auth';
 
-function getStorageStats() {
+const execPromise = promisify(exec);
+
+async function getStorageStats() {
   try {
-    // Run df command for the uploads directory mounted in the container
-    const output = execSync('df -k /app/public/uploads').toString();
-    const lines = output.trim().split('\n');
+    // Run df command for the uploads directory mounted in the container with a 2-second timeout
+    const { stdout } = await execPromise('df -k /app/public/uploads', { timeout: 2000 });
+    const lines = stdout.trim().split('\n');
     if (lines.length >= 2) {
       const lastLine = lines[lines.length - 1];
       const parts = lastLine.replace(/\s+/g, ' ').trim().split(' ');
@@ -37,8 +40,8 @@ function getStorageStats() {
       }
     }
   } catch (err) {
-    // Graceful fallback for Windows local development or envs where df is missing
-    console.warn('[STATS] df command failed or not available, using fallback stats:', err.message);
+    // Graceful fallback for Windows local development or envs where df is missing/times out
+    console.warn('[STATS] df command failed or timed out, using fallback stats:', err.message);
   }
   
   return {
@@ -63,8 +66,8 @@ export async function GET(request) {
     // Mock realistic fluctuating CPU (around 10-25%)
     const mockCpu = Math.round(10 + Math.random() * 15);
 
-    // Calculate actual storage stats on server
-    const storageStats = getStorageStats();
+    // Calculate actual storage stats on server asynchronously
+    const storageStats = await getStorageStats();
 
     return NextResponse.json({
       storage: storageStats,
