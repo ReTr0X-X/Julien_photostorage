@@ -9,6 +9,8 @@ pipeline {
         APP_PORT = '8899'
         DOCKER_NETWORK = 'proxynet'
         DB_HOST = 'mariadb'
+        DB_USER = 'root'
+        DB_PASSWORD = '33wh40k777666'
     }
 
     stages {
