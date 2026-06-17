@@ -28,14 +28,26 @@ pipeline {
         stage('Prune Containers') {
             steps {
                 echo 'Stopping existing deployments...'
-                sh 'docker compose down'
+                sh '''
+                    if docker compose version >/dev/null 2>&1; then
+                        docker compose down
+                    else
+                        docker-compose down
+                    fi
+                '''
             }
         }
 
         stage('Build & Deploy Containers') {
             steps {
                 echo 'Building production Docker images and launching services...'
-                sh 'docker compose up --build -d'
+                sh '''
+                    if docker compose version >/dev/null 2>&1; then
+                        docker compose up --build -d
+                    else
+                        docker-compose up --build -d
+                    fi
+                '''
             }
         }
 
