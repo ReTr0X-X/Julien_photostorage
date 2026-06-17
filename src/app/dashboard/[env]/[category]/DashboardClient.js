@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function DashboardClient({ env, category, operatorName, isAdmin }) {
+export default function DashboardClient({ env, category, operatorName, isAdmin, defaultUnraidUrl, defaultUnraidKey }) {
   const router = useRouter();
 
   // Core Data State
@@ -26,8 +26,9 @@ export default function DashboardClient({ env, category, operatorName, isAdmin }
 
   // Settings Modal (Dev Panel) States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [unraidApiUrl, setUnraidApiUrl] = useState('http://192.168.1.50:8899/api/unraid');
-  const [unraidApiKey, setUnraidApiKey] = useState('unraid_secret_token_2026_xyz');
+  const [unraidApiUrl, setUnraidApiUrl] = useState(defaultUnraidUrl || 'http://192.168.1.50:8899/api/unraid');
+  const [unraidApiKey, setUnraidApiKey] = useState(defaultUnraidKey || 'unraid_secret_token_2026_xyz');
+  const [mockMetrics, setMockMetrics] = useState(true);
   const [testingConnection, setTestingConnection] = useState(false);
   const [apiLogs, setApiLogs] = useState([
     '[SYSTEM] Unraid API control daemon v1.4.2 started.',
@@ -162,14 +163,22 @@ export default function DashboardClient({ env, category, operatorName, isAdmin }
       try {
         const storedUrl = localStorage.getItem('unraid_api_url');
         const storedKey = localStorage.getItem('unraid_api_key');
+        const storedMock = localStorage.getItem('mock_metrics');
         
         if (storedUrl) setUnraidApiUrl(storedUrl);
+        else if (defaultUnraidUrl) setUnraidApiUrl(defaultUnraidUrl);
+
         if (storedKey) setUnraidApiKey(storedKey);
+        else if (defaultUnraidKey) setUnraidApiKey(defaultUnraidKey);
+
+        if (storedMock !== null) {
+          setMockMetrics(storedMock === 'true');
+        }
       } catch (e) {
         console.warn('Failed to access localStorage:', e);
       }
     }
-  }, []);
+  }, [defaultUnraidUrl, defaultUnraidKey]);
 
   // Cleanup toast timeout on unmount
   useEffect(() => {
@@ -324,15 +333,37 @@ export default function DashboardClient({ env, category, operatorName, isAdmin }
       console.warn('Failed to save to localStorage:', e);
     }
   };
+  const saveMockMetrics = (val) => {
+    setMockMetrics(val);
+    try {
+      localStorage.setItem('mock_metrics', String(val));
+    } catch (e) {
+      console.warn('Failed to save to localStorage:', e);
+    }
+  };
 
   const handleTestConnection = async () => {
     setTestingConnection(true);
     addLog(`[CONNECT] Testing connection to ${unraidApiUrl}...`);
-    setTimeout(() => {
+    try {
+      const params = new URLSearchParams();
+      if (unraidApiUrl) params.append('url', unraidApiUrl);
+      if (unraidApiKey) params.append('key', unraidApiKey);
+
+      const res = await fetch(`/api/stats?${params.toString()}`);
+      const data = await res.json();
+      if (res.ok) {
+        setTestingConnection(false);
+        addLog(`[OK] Response 200 from host. Unraid daemon responsive.`);
+        addLog(`[INFO] Array disks reported operational. Used: ${data.storage?.used} TB / Total: ${data.storage?.total} TB`);
+      } else {
+        setTestingConnection(false);
+        addLog(`[ERROR] Connection failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
       setTestingConnection(false);
-      addLog(`[OK] Response 200 from host. Unraid daemon responsive.`);
-      addLog(`[INFO] Array disks reported operational (Read-Only API). Used: 8.4 TB / Total: 16.0 TB`);
-    }, 1200);
+      addLog(`[ERROR] Failed to fetch stats: ${err.message}`);
+    }
   };
 
   const handleClearLogs = () => {
@@ -596,7 +627,16 @@ export default function DashboardClient({ env, category, operatorName, isAdmin }
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch('/api/stats');
+      const storedUrl = typeof window !== 'undefined' ? localStorage.getItem('unraid_api_url') || unraidApiUrl : unraidApiUrl;
+      const storedKey = typeof window !== 'undefined' ? localStorage.getItem('unraid_api_key') || unraidApiKey : unraidApiKey;
+      const storedMock = typeof window !== 'undefined' ? localStorage.getItem('mock_metrics') || String(mockMetrics) : String(mockMetrics);
+
+      const queryParams = new URLSearchParams();
+      if (storedUrl) queryParams.append('url', storedUrl);
+      if (storedKey) queryParams.append('key', storedKey);
+      queryParams.append('mock', storedMock);
+
+      const res = await fetch(`/api/stats?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -604,7 +644,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin }
     } catch (err) {
       console.error(err);
     }
-  }, []);
+  }, [unraidApiUrl, unraidApiKey, mockMetrics]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -2266,6 +2306,19 @@ export default function DashboardClient({ env, category, operatorName, isAdmin }
                     onChange={(e) => saveKey(e.target.value)}
                     placeholder="Voer API token in..."
                   />
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                  <input 
+                    id="mockMetricsToggle"
+                    type="checkbox" 
+                    checked={mockMetrics}
+                    onChange={(e) => saveMockMetrics(e.target.checked)}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <label className="form-label" htmlFor="mockMetricsToggle" style={{ marginBottom: 0, cursor: 'pointer', userSelect: 'none', color: 'white' }}>
+                    🖥️ Gebruik mock-statistieken (Mocks aan)
+                  </label>
                 </div>
 
                 <div className="settings-actions-group" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>

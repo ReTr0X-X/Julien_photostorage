@@ -33,5 +33,17 @@ export default async function DashboardPage({ params }) {
 
   const userIsAdmin = await isAdmin(operatorName);
 
-  return <DashboardClient env={env} category={category} operatorName={operatorName} isAdmin={userIsAdmin} />;
+  const defaultUnraidUrl = process.env.UNRAID_API_URL || 'http://192.168.1.50:8899/api/unraid';
+  const defaultUnraidKey = process.env.UNRAID_API_KEY || 'unraid_secret_token_2026_xyz';
+
+  return (
+    <DashboardClient 
+      env={env} 
+      category={category} 
+      operatorName={operatorName} 
+      isAdmin={userIsAdmin} 
+      defaultUnraidUrl={defaultUnraidUrl}
+      defaultUnraidKey={defaultUnraidKey}
+    />
+  );
 }

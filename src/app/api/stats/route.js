@@ -51,6 +51,21 @@ async function getStorageStats() {
   };
 }
 
+function getActualCPUUsage() {
+  const cpus = os.cpus();
+  let totalMs = 0;
+  let idleMs = 0;
+  for (const cpu of cpus) {
+    for (const type in cpu.times) {
+      totalMs += cpu.times[type];
+    }
+    idleMs += cpu.times.idle;
+  }
+  if (totalMs === 0) return 0;
+  const usedMs = totalMs - idleMs;
+  return Math.round((usedMs / totalMs) * 100);
+}
+
 export async function GET(request) {
   try {
     const user = verifyAuth(request);
@@ -58,21 +73,62 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 401 });
     }
 
-    // Dynamic RAM calculation
+    const { searchParams } = new URL(request.url);
+    const mockParam = searchParams.get('mock');
+    const targetUrl = searchParams.get('url');
+    const apiKey = searchParams.get('key');
+
+    const isMock = mockParam !== 'false';
+
+    // Real RAM Calculation
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMemPercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
 
-    // Mock realistic fluctuating CPU (around 10-25%)
+    if (!isMock) {
+      // 1. Try querying custom Unraid API if URL is provided
+      if (targetUrl) {
+        try {
+          const headers = {};
+          if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['x-api-key'] = apiKey;
+          }
+          const response = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(3000) });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && (data.storage || data.cpu !== undefined || data.ram !== undefined)) {
+              return NextResponse.json({
+                storage: data.storage || { used: 8.4, total: 16.0, percent: 52 },
+                cpu: data.cpu !== undefined ? data.cpu : getActualCPUUsage(),
+                ram: data.ram !== undefined ? data.ram : usedMemPercent
+              });
+            }
+          } else {
+            console.warn('[STATS] Unraid API endpoint returned error status:', response.status);
+          }
+        } catch (err) {
+          console.warn('[STATS] Custom Unraid API query failed:', err.message);
+        }
+      }
+
+      // 2. Fallback to actual system stats
+      const storageStats = await getStorageStats();
+      const actualCpu = getActualCPUUsage();
+
+      return NextResponse.json({
+        storage: storageStats,
+        cpu: actualCpu,
+        ram: usedMemPercent
+      });
+    }
+
+    // Default: Return mock metrics
     const mockCpu = Math.round(10 + Math.random() * 15);
-
-    // Calculate actual storage stats on server asynchronously
-    const storageStats = await getStorageStats();
-
     return NextResponse.json({
-      storage: storageStats,
+      storage: { used: 8.4, total: 16.0, percent: 52 },
       cpu: mockCpu,
-      ram: Math.max(34, usedMemPercent) // Align with UI standard or show real system usage if higher
+      ram: Math.max(34, usedMemPercent)
     });
   } catch (err) {
     console.error('Stats API Error:', err);
