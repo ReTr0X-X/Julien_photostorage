@@ -28,26 +28,16 @@ pipeline {
         stage('Prune Containers') {
             steps {
                 echo 'Stopping existing deployments...'
-                sh '''
-                    if docker compose version >/dev/null 2>&1; then
-                        docker compose down
-                    else
-                        docker-compose down
-                    fi
-                '''
+                sh 'docker stop ems_vault_web || true'
+                sh 'docker rm ems_vault_web || true'
             }
         }
 
         stage('Build & Deploy Containers') {
             steps {
                 echo 'Building production Docker images and launching services...'
-                sh '''
-                    if docker compose version >/dev/null 2>&1; then
-                        docker compose up --build -d
-                    else
-                        docker-compose up --build -d
-                    fi
-                '''
+                sh 'docker build -t ems_vault_web:latest .'
+                sh 'docker run -d --name ems_vault_web --restart always -p ${APP_PORT}:3000 --add-host host.docker.internal:host-gateway -v upload_data:/app/public/uploads -e DB_HOST="${DB_HOST:-host.docker.internal}" -e DB_PORT="${DB_PORT:-3306}" -e DB_USER="${DB_USER:-root}" -e DB_PASSWORD="${DB_PASSWORD:-rootpassword}" -e DB_NAME="${DB_NAME:-ems_vault}" -e ADMIN_USER="${ADMIN_USER:-officer}" -e ADMIN_PASSWORD="${ADMIN_PASSWORD:-evidence2026}" ems_vault_web:latest'
             }
         }
 
