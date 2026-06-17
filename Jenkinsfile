@@ -14,7 +14,14 @@ pipeline {
 
         stage('Checkout SCM') {
             steps {
-                checkout scm
+                script {
+                    try {
+                        checkout scm
+                    } catch (Exception e) {
+                        echo "SCM checkout is niet beschikbaar (inline pipeline script). Handmatige Git checkout starten..."
+                        git branch: 'main', url: 'https://github.com/ReTr0X-X/Julien_photostorage.git'
+                    }
+                }
             }
         }
 
