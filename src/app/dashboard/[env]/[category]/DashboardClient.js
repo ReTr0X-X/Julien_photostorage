@@ -159,11 +159,15 @@ export default function DashboardClient({ env, category, operatorName }) {
   // Load settings from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUrl = localStorage.getItem('unraid_api_url');
-      const storedKey = localStorage.getItem('unraid_api_key');
-      
-      if (storedUrl) setUnraidApiUrl(storedUrl);
-      if (storedKey) setUnraidApiKey(storedKey);
+      try {
+        const storedUrl = localStorage.getItem('unraid_api_url');
+        const storedKey = localStorage.getItem('unraid_api_key');
+        
+        if (storedUrl) setUnraidApiUrl(storedUrl);
+        if (storedKey) setUnraidApiKey(storedKey);
+      } catch (e) {
+        console.warn('Failed to access localStorage:', e);
+      }
     }
   }, []);
 
@@ -306,11 +310,19 @@ export default function DashboardClient({ env, category, operatorName }) {
   // Save settings to localStorage helpers
   const saveUrl = (val) => {
     setUnraidApiUrl(val);
-    localStorage.setItem('unraid_api_url', val);
+    try {
+      localStorage.setItem('unraid_api_url', val);
+    } catch (e) {
+      console.warn('Failed to save to localStorage:', e);
+    }
   };
   const saveKey = (val) => {
     setUnraidApiKey(val);
-    localStorage.setItem('unraid_api_key', val);
+    try {
+      localStorage.setItem('unraid_api_key', val);
+    } catch (e) {
+      console.warn('Failed to save to localStorage:', e);
+    }
   };
 
   const handleTestConnection = async () => {
