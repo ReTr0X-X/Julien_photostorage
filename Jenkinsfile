@@ -25,13 +25,6 @@ pipeline {
             }
         }
 
-        stage('Dependency Check & Lint') {
-            steps {
-                echo 'Installing dev dependencies and running lint check inside a Node Docker container...'
-                sh 'docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/app -w /app node:20-alpine sh -c "npm ci --no-audit --no-fund && npm run lint"'
-            }
-        }
-
         stage('Prune Containers') {
             steps {
                 echo 'Stopping existing deployments...'

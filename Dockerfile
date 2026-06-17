@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+RUN npm run lint
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
