@@ -349,6 +349,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
       const params = new URLSearchParams();
       if (unraidApiUrl) params.append('url', unraidApiUrl);
       if (unraidApiKey) params.append('key', unraidApiKey);
+      params.append('mock', 'false');
 
       const res = await fetch(`/api/stats?${params.toString()}`);
       const data = await res.json();

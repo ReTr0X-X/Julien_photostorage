@@ -96,19 +96,38 @@ export async function GET(request) {
           }
           const response = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(3000) });
           if (response.ok) {
-            const data = await response.json();
+            let data;
+            try {
+              data = await response.json();
+            } catch (jsonErr) {
+              return NextResponse.json(
+                { error: `Ongeldige JSON-respons van custom API: ${jsonErr.message}` },
+                { status: 502 }
+              );
+            }
             if (data && (data.storage || data.cpu !== undefined || data.ram !== undefined)) {
               return NextResponse.json({
                 storage: data.storage || { used: 8.4, total: 16.0, percent: 52 },
                 cpu: data.cpu !== undefined ? data.cpu : getActualCPUUsage(),
                 ram: data.ram !== undefined ? data.ram : usedMemPercent
               });
+            } else {
+              return NextResponse.json(
+                { error: 'Custom API-respons mist vereiste velden (storage, cpu, ram)' },
+                { status: 502 }
+              );
             }
           } else {
-            console.warn('[STATS] Unraid API endpoint returned error status:', response.status);
+            return NextResponse.json(
+              { error: `Custom API-endpoint retourneerde status ${response.status}` },
+              { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
+            );
           }
         } catch (err) {
-          console.warn('[STATS] Custom Unraid API query failed:', err.message);
+          return NextResponse.json(
+            { error: `Verbinding met custom API mislukt: ${err.message}` },
+            { status: 504 }
+          );
         }
       }
 
