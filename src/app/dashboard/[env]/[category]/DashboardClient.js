@@ -4,19 +4,30 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// Global client-side cache to preserve state across Next.js page transitions
+let globalDashboardCache = {
+  categories: null,
+  stats: null,
+  photos: {},
+  subfolders: {},
+  allSubfolders: null,
+  profile: null
+};
+
 export default function DashboardClient({ env, category, operatorName, isAdmin, defaultUnraidUrl, defaultUnraidKey }) {
   const router = useRouter();
 
   // Core Data State
-  const [photos, setPhotos] = useState([]);
-  const [stats, setStats] = useState({
+  const [photos, setPhotos] = useState(() => globalDashboardCache.photos[env] || []);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [stats, setStats] = useState(() => globalDashboardCache.stats || {
     storage: { used: 8.4, total: 16.0, percent: 52 },
     cpu: 12,
     ram: 34
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !globalDashboardCache.photos[env]);
 
   // Modal States
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -54,7 +65,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
   const toastTimeoutRef = useRef(null);
 
   // Category States
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(() => globalDashboardCache.categories || []);
   const [collectionsExpanded, setCollectionsExpanded] = useState(true);
   const [showAddCategoryForm, setShowAddCategoryForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -63,8 +74,8 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
   const [expandedCategories, setExpandedCategories] = useState({});
 
   // Subfolder (Mappen) States
-  const [subfolders, setSubfolders] = useState([]);
-  const [allSubfolders, setAllSubfolders] = useState([]);
+  const [subfolders, setSubfolders] = useState(() => globalDashboardCache.subfolders[`${env}-${category}`] || []);
+  const [allSubfolders, setAllSubfolders] = useState(() => globalDashboardCache.allSubfolders || []);
   const [currentSubfolder, setCurrentSubfolder] = useState(null);
   const [showAddSubfolderForm, setShowAddSubfolderForm] = useState(false);
   const [newSubfolderName, setNewSubfolderName] = useState('');
@@ -100,9 +111,9 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
   const [editUserSuccessMessage, setEditUserSuccessMessage] = useState('');
 
   // Profile Update Fields
-  const [profileName, setProfileName] = useState('');
-  const [profileEmail, setProfileEmail] = useState('');
-  const [profileAvatar, setProfileAvatar] = useState('');
+  const [profileName, setProfileName] = useState(() => globalDashboardCache.profile?.name || '');
+  const [profileEmail, setProfileEmail] = useState(() => globalDashboardCache.profile?.email || '');
+  const [profileAvatar, setProfileAvatar] = useState(() => globalDashboardCache.profile?.avatar || '');
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -229,7 +240,9 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
       const res = await fetch('/api/categories');
       if (res.ok) {
         const data = await res.json();
-        setCategories(data.categories || []);
+        const cats = data.categories || [];
+        globalDashboardCache.categories = cats;
+        setCategories(cats);
       }
     } catch (err) {
       console.error('Fetch categories error:', err);
@@ -549,11 +562,15 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
   // Data Fetching
   const fetchPhotos = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!globalDashboardCache.photos[env]) {
+        setLoading(true);
+      }
       const res = await fetch(`/api/photos?env=${env}&category=all`);
       if (!res.ok) throw new Error('Ophalen mislukt');
       const data = await res.json();
-      setPhotos(data.photos || []);
+      const list = data.photos || [];
+      globalDashboardCache.photos[env] = list;
+      setPhotos(list);
     } catch (err) {
       console.error(err);
     } finally {
@@ -569,7 +586,9 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
         const res = await fetch(`/api/subfolders?env=${env}&category=${category}`);
         if (res.ok) {
           const data = await res.json();
-          setSubfolders(data.subfolders || []);
+          const list = data.subfolders || [];
+          globalDashboardCache.subfolders[`${env}-${category}`] = list;
+          setSubfolders(list);
         }
       } catch (err) {
         console.error('Fetch subfolders error:', err);
@@ -580,7 +599,9 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
       const res = await fetch(`/api/subfolders?env=${env}&category=all`);
       if (res.ok) {
         const data = await res.json();
-        setAllSubfolders(data.subfolders || []);
+        const list = data.subfolders || [];
+        globalDashboardCache.allSubfolders = list;
+        setAllSubfolders(list);
       }
     } catch (err) {
       console.error('Fetch all subfolders error:', err);
@@ -649,6 +670,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
       const res = await fetch(`/api/stats?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
+        globalDashboardCache.stats = data;
         setStats(data);
       }
     } catch (err) {
@@ -665,9 +687,13 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
         setUsersList(data.users || []);
         const selfUser = data.users?.find(u => u.username === operatorName);
         if (selfUser) {
-          setProfileName(selfUser.name || '');
-          setProfileEmail(selfUser.email || '');
-          setProfileAvatar(selfUser.avatar_path || '');
+          const name = selfUser.name || '';
+          const email = selfUser.email || '';
+          const avatar = selfUser.avatar_path || '';
+          globalDashboardCache.profile = { name, email, avatar };
+          setProfileName(name);
+          setProfileEmail(email);
+          setProfileAvatar(avatar);
         }
       }
     } catch (err) {
@@ -1205,17 +1231,26 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
         />
       )}
 
-      {/* Hover Overlay info */}
-      <div className="photo-card-overlay">
-        <div className="photo-card-name">{photo.name}</div>
-        {photo.description && (
-          <div className="photo-card-desc">{photo.description}</div>
-        )}
-      </div>
-
-      {/* Footer text */}
-      <div className="photo-card-footer">
-        {photo.name}
+      {/* Glass Metadata Footer Layer */}
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: 'rgba(255, 255, 255, 0.03)',
+        backdropFilter: 'blur(12px)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        padding: '0.75rem 1rem',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 5
+      }}>
+        <div style={{ fontWeight: '600', fontSize: '0.95rem', color: 'white', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {photo.name}
+        </div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-label)', marginTop: '0.125rem' }}>
+          📍 {photo.location} • {photo.date_taken}
+        </div>
       </div>
     </div>
   );
@@ -1236,10 +1271,10 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
   return (
     <div className="dashboard-layout">
       {/* 1. SIDEBAR */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <Link href="/portal" className="sidebar-brand">
-            <span className="sidebar-brand-icon">☁️</span> UnVault
+          <Link href="/portal" className="sidebar-brand" onClick={() => setIsSidebarOpen(false)}>
+            <span className="sidebar-brand-icon sidebar-icon">☁️</span> <span className="sidebar-text">UnVault</span>
           </Link>
           <div className={`sidebar-badge ${env === 'rp' ? 'rp' : ''}`}>
             {env === 'rp' ? 'RP Server' : 'Echte Wereld'}
@@ -1251,23 +1286,25 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
           <Link 
             href={`/dashboard/${env}/photos`} 
             className={`sidebar-item ${category === 'photos' ? 'active' : ''}`}
+            onClick={() => setIsSidebarOpen(false)}
           >
-            🖼️ Foto's
+            <span className="sidebar-icon">🖼️</span> <span className="sidebar-text">Foto's</span>
           </Link>
           <Link 
             href={`/dashboard/${env}/videos`} 
             className={`sidebar-item ${category === 'videos' ? 'active' : ''}`}
             style={{ marginBottom: '1.5rem' }}
+            onClick={() => setIsSidebarOpen(false)}
           >
-            🎥 Video's
+            <span className="sidebar-icon">🎥</span> <span className="sidebar-text">Video's</span>
           </Link>
 
           <div 
             className="sidebar-label-interactive" 
             onClick={() => setCollectionsExpanded(!collectionsExpanded)}
           >
-            <span>Collecties</span>
-            <span className="caret" style={{ transform: collectionsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+            <span className="sidebar-text">Collecties</span>
+            <span className="caret sidebar-caret" style={{ transform: collectionsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
               ▼
             </span>
           </div>
@@ -1299,6 +1336,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                       <button
                         type="button"
                         onClick={(e) => toggleCategoryExpand(catName, e)}
+                        className="sidebar-folder-caret"
                         style={{
                           background: 'transparent',
                           border: 'none',
@@ -1318,6 +1356,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
 
                       <Link 
                         href={`/dashboard/${env}/${catName}`} 
+                        onClick={() => setIsSidebarOpen(false)}
                         style={{
                           flex: 1,
                           display: 'flex',
@@ -1328,9 +1367,9 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                           textDecoration: 'none'
                         }}
                       >
-                        <span>{catEmoji}</span>
-                        <span>{displayName}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto', background: 'rgba(255,255,255,0.04)', padding: '0.1rem 0.35rem', borderRadius: '10px' }}>
+                        <span className="sidebar-icon">{catEmoji}</span>
+                        <span className="sidebar-text">{displayName}</span>
+                        <span className="sidebar-count" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto', background: 'rgba(255,255,255,0.04)', padding: '0.1rem 0.35rem', borderRadius: '10px' }}>
                           {catPhotos.length}
                         </span>
                       </Link>
@@ -1372,6 +1411,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                                 setEditError('');
                                 setShowDeleteConfirm(false);
                                 setShowEditModal(true);
+                                setIsSidebarOpen(false);
                               }}
                               onContextMenu={(e) => openContextMenu(e, 'photo', photo)}
                               className="sidebar-file-item"
@@ -1390,8 +1430,8 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                               }}
                               title={photo.name}
                             >
-                              <span>{photo.filetype === 'video' ? '🎥' : '🖼️'}</span>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{photo.name}</span>
+                              <span className="sidebar-icon">{photo.filetype === 'video' ? '🎥' : '🖼️'}</span>
+                              <span className="sidebar-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{photo.name}</span>
                             </div>
                           ))
                         )}
@@ -1451,8 +1491,8 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                   className="btn-sidebar-add-dashed"
                   onClick={() => setShowAddCategoryForm(true)}
                 >
-                  <span>➕</span>
-                  <span>Categorie toevoegen</span>
+                  <span className="sidebar-icon">➕</span>
+                  <span className="sidebar-text">Categorie toevoegen</span>
                 </button>
               )}
             </>
@@ -1460,27 +1500,56 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
         </nav>
 
         {/* Dynamic monitoring stats panel */}
-        <div className="sidebar-footer">
-          <div className="stat-panel-title">Unraid Opslag</div>
-          <div className="stat-item">
-            <div className="stat-header">
-              <span>Array Gebruik</span>
-              <span>{stats.storage?.used} TB / {stats.storage?.total} TB</span>
+        <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '1.25rem 1rem' }}>
+          <div className="stat-panel-title" style={{ fontFamily: 'var(--font-label)', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem', letterSpacing: '0.05em' }}>Unraid Opslag</div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {/* Storage Progress */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.75rem', fontFamily: 'var(--font-label)' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Array Gebruik</span>
+                <span style={{ color: 'var(--accent-blue)', fontWeight: '600' }}>{stats.storage?.used} TB / {stats.storage?.total} TB</span>
+              </div>
+              <div className="stat-bar-track" style={{ height: '4px', backgroundColor: 'var(--bg-primary)', borderRadius: '9999px', overflow: 'hidden' }}>
+                <div 
+                  className="stat-bar-fill" 
+                  style={{ width: `${stats.storage?.percent}%`, height: '100%', background: 'linear-gradient(to right, var(--accent-blue), var(--accent-purple))', borderRadius: '9999px' }}
+                ></div>
+              </div>
             </div>
-            <div className="stat-bar-track">
-              <div 
-                className="stat-bar-fill" 
-                style={{ width: `${stats.storage?.percent}%` }}
-              ></div>
-            </div>
-          </div>
 
-          <div className="stat-grid-usage" style={{ marginBottom: '1rem' }}>
-            <div className="stat-usage-item">
-              CPU: <span className="stat-usage-val">{stats.cpu}%</span>
+            {/* CPU Progress */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.75rem', fontFamily: 'var(--font-label)', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--accent-green)' }}>memory</span>
+                  CPU
+                </span>
+                <span style={{ color: 'var(--accent-green)', fontWeight: '600' }}>{stats.cpu}%</span>
+              </div>
+              <div className="stat-bar-track" style={{ height: '4px', backgroundColor: 'var(--bg-primary)', borderRadius: '9999px', overflow: 'hidden' }}>
+                <div 
+                  className="stat-bar-fill" 
+                  style={{ width: `${stats.cpu}%`, height: '100%', background: 'linear-gradient(to right, var(--accent-blue), var(--accent-green))', borderRadius: '9999px' }}
+                ></div>
+              </div>
             </div>
-            <div className="stat-usage-item">
-              RAM: <span className="stat-usage-val">{stats.ram}%</span>
+
+            {/* RAM Progress */}
+            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.75rem', fontFamily: 'var(--font-label)', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--accent-purple)' }}>analytics</span>
+                  RAM
+                </span>
+                <span style={{ color: 'var(--accent-purple)', fontWeight: '600' }}>{stats.ram}%</span>
+              </div>
+              <div className="stat-bar-track" style={{ height: '4px', backgroundColor: 'var(--bg-primary)', borderRadius: '9999px', overflow: 'hidden' }}>
+                <div 
+                  className="stat-bar-fill" 
+                  style={{ width: `${stats.ram}%`, height: '100%', background: 'linear-gradient(to right, var(--accent-blue), var(--accent-purple))', borderRadius: '9999px' }}
+                ></div>
+              </div>
             </div>
           </div>
 
@@ -1580,11 +1649,26 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
           </div>
         </div>
       </aside>
+      {isSidebarOpen && (
+        <div 
+          className="sidebar-overlay" 
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
 
       {/* 2. MAIN CONTAINER */}
       <main className="dashboard-main">
         {/* Header Bar */}
         <header className="header">
+          <button 
+            type="button"
+            className="hamburger-btn"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            title="Menu openen"
+          >
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+
           <div className="header-search">
             <span className="header-search-icon">🔍</span>
             <input 
@@ -1603,7 +1687,7 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                 setUploadSuccess('');
                 setShowUploadModal(true);
               }}
-              style={{ background: 'var(--accent-blue)', color: 'white', borderRadius: '8px', padding: '0.5rem 1rem' }}
+              style={{ borderRadius: '8px', padding: '0.5rem 1.25rem', width: 'auto' }}
             >
               📤 Uploaden
             </button>
@@ -1760,44 +1844,55 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
                       <div 
                         key={folder.id}
                         onClick={() => setCurrentSubfolder(folder.name)}
-                        className="glass"
+                        className="glass-card"
                         style={{ 
-                          padding: '1rem', 
-                          borderRadius: '8px', 
-                          border: '1px solid var(--border-color)', 
+                          padding: '1.25rem 1rem', 
+                          borderRadius: '12px', 
                           cursor: 'pointer',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '0.5rem',
-                          position: 'relative',
-                          transition: 'all 0.2s ease',
-                          background: 'rgba(255, 255, 255, 0.02)'
+                          position: 'relative'
                         }}
                       >
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteSubfolder(folder.name, e)}
-                          style={{
-                            position: 'absolute',
-                            top: '0.5rem',
-                            right: '0.5rem',
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem'
-                          }}
-                          title="Map verwijderen"
-                        >
-                          ✕
-                        </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                          <div style={{
+                            padding: '0.5rem',
+                            backgroundColor: 'rgba(173, 198, 255, 0.1)',
+                            color: 'var(--accent-blue)',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: '24px', fontVariationSettings: "'FILL' 1" }}>folder</span>
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSubfolder(folder.name, e)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              fontSize: '1rem',
+                              padding: '2px',
+                              lineHeight: '1',
+                              transition: 'color 0.2s'
+                            }}
+                            onMouseOver={(e) => e.target.style.color = 'var(--accent-red)'}
+                            onMouseOut={(e) => e.target.style.color = 'var(--text-muted)'}
+                            title="Map verwijderen"
+                          >
+                            ✕
+                          </button>
+                        </div>
 
-                        <div style={{ fontSize: '2rem' }}>📁</div>
-                        <div style={{ fontWeight: '600', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.9rem' }} title={folder.name}>
+                        <div style={{ fontWeight: '600', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.95rem', fontFamily: 'var(--font-sans)', marginBottom: '0.125rem' }} title={folder.name}>
                           {folder.name}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {fileCount} {fileCount === 1 ? 'item' : 'items'}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-label)' }}>
+                          {fileCount} {fileCount === 1 ? 'Bestand' : 'Bestanden'}
                         </div>
                       </div>
                     );
@@ -1812,8 +1907,78 @@ export default function DashboardClient({ env, category, operatorName, isAdmin, 
               Mediavault laden...
             </div>
           ) : filteredPhotos.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)', border: '1px dashed var(--border-color)', borderRadius: '12px' }}>
-              {currentSubfolder ? 'Geen items gevonden in deze map.' : 'Geen losse items in deze collectie. Sleep bestanden of klik op uploaden!'}
+            <div 
+              className="glass-card" 
+              style={{ 
+                borderRadius: '16px', 
+                minHeight: '400px', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                padding: '3rem', 
+                textAlign: 'center', 
+                position: 'relative', 
+                overflow: 'hidden'
+              }}
+            >
+              {/* Background Decorative Element */}
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.05, pointerEvents: 'none', overflow: 'hidden' }}>
+                <img 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.1)', filter: 'blur(20px)' }} 
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAehntd2fgsV3jo6PPRPMkxQFvAyoCCEXK9xL3eIDeAsHaIITgSVaIPYiqrTpOqVn9DU2QayaoM3EglqWSMDeJsF7bFn6LeYy8FarRLQpWHD524GbEx6HOVDet_4WrYhSyEfMhatRDjoR-ek_M1lkTFRpntXCz6xwnm_ezMMrTW6p8HrBzzsqxK_-jnEO4KqZ0ava-Fn0zmlLUGZixrWoN2wLYlwKxAtmPxr7p5GZ0nceB5Rd82FFO9A3W4KhPxvrToLxR5mzNqUkOv" 
+                  alt="Decorative BG"
+                />
+              </div>
+              
+              <div style={{ position: 'relative', zIndex: 10 }}>
+                <div style={{ 
+                  width: '112px', 
+                  height: '112px', 
+                  backgroundColor: 'rgba(173, 198, 255, 0.06)', 
+                  borderRadius: '50%', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  marginBottom: '2rem', 
+                  marginLeft: 'auto', 
+                  marginRight: 'auto',
+                  boxShadow: '0 0 0 8px rgba(173, 198, 255, 0.02)'
+                }}>
+                  <span className="material-symbols-outlined" style={{ color: 'var(--accent-blue)', fontSize: '56px' }}>upload_file</span>
+                </div>
+                
+                <h4 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: 'white', fontWeight: '600', marginBottom: '0.5rem' }}>
+                  {currentSubfolder ? 'Geen voertuigen in deze map' : 'Geen voertuigen in deze collectie'}
+                </h4>
+                <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '440px', margin: '0 auto 2.5rem auto', lineHeight: '1.6' }}>
+                  {currentSubfolder 
+                    ? 'Voeg voertuigen toe aan deze map door ze te uploaden en deze map te selecteren.' 
+                    : 'Maak je collectie compleet door bestanden te uploaden. We ondersteunen afbeeldingen en video-uploads.'}
+                </p>
+                
+                <button 
+                  type="button"
+                  className="btn-primary" 
+                  onClick={() => {
+                    setUploadError('');
+                    setUploadSuccess('');
+                    setShowUploadModal(true);
+                  }}
+                  style={{ 
+                    padding: '0.85rem 2.5rem', 
+                    borderRadius: '12px', 
+                    fontWeight: 'bold', 
+                    fontSize: '1rem',
+                    width: 'auto',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    boxShadow: '0 10px 25px -5px rgba(173, 198, 255, 0.25)'
+                  }}
+                >
+                  Bestanden uploaden!
+                </button>
+              </div>
             </div>
           ) : sortBy === 'newest' || sortBy === 'oldest' ? (
             <div className="timeline-section">
